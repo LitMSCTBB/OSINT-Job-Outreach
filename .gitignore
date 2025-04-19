@@ -1,0 +1,7 @@
+Agent-S/
+browser-use/
+data/
+.env
+
+__pycache__/
+
