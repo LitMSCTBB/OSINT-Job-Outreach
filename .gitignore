@@ -15,3 +15,5 @@ PROMPTS.py
 # Example files can be committed
 !.env.example
 !config.example.yml
+
+.cursor
