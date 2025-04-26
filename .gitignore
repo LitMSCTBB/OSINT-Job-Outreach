@@ -16,4 +16,4 @@ PROMPTS.py
 !.env.example
 !config.example.yml
 
-.cursor
+.cursor/
