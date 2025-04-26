@@ -500,7 +500,11 @@ async def outreach(company_url: str, domain: str):
             await asyncio.sleep(2)
 
         # try twitter message as well
-        if person["twitter_handle"] != "NONE" and person["twitter_message"] and not person["twitter_message_sent"]:
+        if (
+            person["twitter_handle"] != "NONE"
+            and person["twitter_message"]
+            and not person["twitter_message_sent"]
+        ):
             try:
                 # TBH for now we should just send the email message as a DM
                 status = await send_twitter_dm(

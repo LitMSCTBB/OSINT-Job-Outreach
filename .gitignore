@@ -5,3 +5,13 @@ data/
 
 __pycache__/
 
+# Sensitive/Personal Config
+.env
+.env.*
+config.yml
+config.*.yml
+PROMPTS.py
+
+# Example files can be committed
+!.env.example
+!config.example.yml

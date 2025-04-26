@@ -10,15 +10,19 @@ global transmission_ready, process
 transmission_ready = None
 process = None
 
+
 def load_json(path):
     with open(path, "r") as f:
         return json.load(f)
+
 
 def write_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
+
 # this is different from the file handler functions because we let streamlit autorefresh so that we're just doing one-time checks of the files each time
+
 
 def signal_done(step_key):
     # read from data/current.json to get the company domain

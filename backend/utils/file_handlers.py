@@ -2,7 +2,10 @@ import json
 import os
 import time
 
+from CONSTANTS import ProcessingStage, parse_processing_stage
+
 READY_FILE = "data/"
+
 
 def write_step_output(process_step: dict, data: dict):
     """Write output file and mark step as ready in transmissions/ready.json"""
@@ -31,7 +34,9 @@ def write_step_output(process_step: dict, data: dict):
 def wait_until_ready(process_step: dict):
     """Block until step's done_key is marked True in transmissions/ready.json"""
     ready_key = process_step["done_key"]
-    ready_file = os.path.join(os.path.dirname(process_step["output_file"]), "ready.json")
+    ready_file = os.path.join(
+        os.path.dirname(process_step["output_file"]), "ready.json"
+    )
 
     print(f"👀 Waiting for key '{ready_key}' == true in {ready_file}...")
 
@@ -47,3 +52,42 @@ def wait_until_ready(process_step: dict):
             print(f"⚠️ Error reading {ready_file}: {e}")
 
         time.sleep(0.5)
+
+
+def is_step_complete(company: str, stage_name: str) -> bool:
+    """Check if a processing stage is complete by checking state.json"""
+    try:
+        target_stage = parse_processing_stage(stage_name)
+    except ValueError:
+        raise ValueError(f"Unknown stage: {stage_name}")
+
+    state_path = os.path.join("data", company, "state.json")
+    if not os.path.exists(state_path):
+        return False
+
+    with open(state_path, "r") as f:
+        state = json.load(f)
+        current_stage = parse_processing_stage(
+            state.get("stage", ProcessingStage.NOT_STARTED.value)
+        )
+        return current_stage >= target_stage
+
+
+def mark_step_complete(company: str, stage_name: str):
+    """Mark a processing stage as complete in state.json"""
+    try:
+        stage = parse_processing_stage(stage_name)
+    except ValueError:
+        raise ValueError(f"Unknown stage: {stage_name}")
+
+    state_path = os.path.join("data", company, "state.json")
+    state = {}
+    if os.path.exists(state_path):
+        with open(state_path, "r") as f:
+            state = json.load(f)
+
+    state["stage"] = stage.value
+
+    os.makedirs(os.path.dirname(state_path), exist_ok=True)
+    with open(state_path, "w") as f:
+        json.dump(state, f)

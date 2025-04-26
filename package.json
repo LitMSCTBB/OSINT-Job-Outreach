@@ -1,0 +1,10 @@
+{
+  "name": "ceo",
+  "version": "1.0.0",
+  "description": "OSINT Cold Email Outreach",
+  "scripts": {
+    "dev": "concurrently \"cd backend && python app.py\" \"cd frontend && npm run dev\""
+  },
+  "author": "",
+  "license": "ISC"
+}
