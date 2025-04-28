@@ -89,10 +89,8 @@ async def craft_messages(
             )
 
             signature = """
-    Best,
-    Arnav Adhikari
-    Electrical Engineering & Computer Science @ MIT
-    arnavadhikari.com | linkedin.com/in/arnavwad | +1 (713) 614-1793"""
+    Best,SIGNATURE"""
+    
 
             # ask gpt 3.5 to quickly extract just the subject and body
             email_content = await prompt(
