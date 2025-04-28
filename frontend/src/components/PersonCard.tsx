@@ -1,33 +1,121 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Person } from "../api";
+import { CopyableTextArea } from "./CopyableTextArea";
 
+type Mode = "input" | "reviewing" | "completed";
 
 interface Props {
+  mode: Mode;
   person?: Person;
-  onSubmit: (text: string) => Promise<void>;
-  onSend?: () => Promise<void>;
+  onAddNewPerson?: (text: string) => Promise<void>;
+  onSendPerson?: (email2: string) => Promise<void>;
   onCancel?: () => void;
+  onRedraft?: () => Promise<void>;
 }
 
+/**
+ * Formats a Twitter/X handle or URL into either a full URL or @handle format
+ * @param input Twitter/X handle, URL, or any string containing a handle
+ * @param format 'link' for full URL or '@handle' for handle format
+ * @returns Formatted handle or link
+ *
+ * Examples:
+ * formatTwitter('johndoe', 'link') => 'https://twitter.com/johndoe'
+ * formatTwitter('https://x.com/johndoe', '@handle') => '@johndoe'
+ */
+export function formatTwitter(
+  input: string | undefined | null,
+  format: "link" | "@handle"
+): string {
+  if (!input) return "";
+
+  // Extract handle from various formats
+  let handle = input
+    .trim()
+    .toLowerCase()
+    .replace(/^@/, "") // Remove @ if present
+    .replace(/^https?:\/\/(www\.)?(twitter\.com|x\.com)\//, "") // Remove Twitter or X URL
+    .replace(/^(twitter\.com|x\.com)\//, "") // Remove shorter URL format
+    .replace(/\/$/, "") // Remove trailing slash if present
+    .replace(/[?#].*$/, ""); // Remove query params and hash
+
+  // Return requested format
+  if (format === "link") {
+    return `https://twitter.com/${handle}`; // Still using twitter.com for consistency
+  } else {
+    return `@${handle}`;
+  }
+}
+
+const StatusIndicator = ({ mode }: { mode: Mode }) => (
+  <div className="flex items-center gap-2 mt-2">
+    <div
+      className={`w-2 h-2 rounded-full ${
+        mode === "completed"
+          ? "bg-green-400"
+          : mode === "reviewing"
+          ? "bg-blue-400 animate-pulse"
+          : "bg-gray-400"
+      }`}
+    />
+    <span className="text-sm text-gray-600 capitalize">
+      {mode === "completed" ? "completed" : "processing"}
+    </span>
+  </div>
+);
+
+const handleKeyDown = (
+  e: React.KeyboardEvent<HTMLTextAreaElement>,
+  submitAction: () => Promise<void>
+) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+    console.log("ctrl + Enter key pressed");
+    e.preventDefault();
+    submitAction();
+  }
+};
+
 export const PersonCard: React.FC<Props> = ({
+  mode,
   person,
-  onSubmit,
-  onSend,
+  onAddNewPerson,
+  onSendPerson,
   onCancel,
+  onRedraft,
 }) => {
-  const [inputText, setInputText] = useState("");
+  const [inputText, setInputText] = useState(
+    person?.email2 || person?.email || ""
+  );
   const [editedEmail, setEditedEmail] = useState(person?.email || "");
-  const [isEditing, setIsEditing] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isInsightsOpen, setIsInsightsOpen] = useState(false);
+  const [possibleEmails, setPossibleEmails] = useState(
+    person?.possible_emails?.join("\n") || ""
+  );
+
+  useEffect(() => {
+    if (!person && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, []);
 
   // Input mode (new person)
-  if (!person) {
+  if (mode === "input") {
     return (
       <div className="border rounded-lg p-4 shadow-md bg-white">
         <h2 className="text-xl font-semibold mb-3">Add New Person</h2>
-        <textarea
-          className="w-full h-40 p-3 border rounded font-mono text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        <CopyableTextArea
+          ref={textareaRef}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
+          onKeyDown={(e) =>
+            handleKeyDown(e, async () => {
+              if (inputText.trim()) {
+                if (onAddNewPerson) await onAddNewPerson(inputText);
+              }
+            })
+          }
+          className="w-full h-40 p-3 border rounded font-mono text-sm bg-gray-50 overflow-auto whitespace-pre-wrap focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           placeholder={`Paste person info here. Example:
 
 Jesse Zhang
@@ -35,6 +123,7 @@ https://linkedin.com/in/jesse
 @jesseontwitter
 Works at decagon.ai
 Met at hackathon, interested in LLMs`}
+          spellCheck={false}
         />
         <div className="flex justify-end gap-3 mt-3">
           {onCancel && (
@@ -47,8 +136,7 @@ Met at hackathon, interested in LLMs`}
           )}
           <button
             onClick={async () => {
-              await onSubmit(inputText);
-              setInputText("");
+              if (onAddNewPerson) await onAddNewPerson(inputText);
             }}
             disabled={!inputText.trim()}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
@@ -60,63 +148,78 @@ Met at hackathon, interested in LLMs`}
     );
   }
 
-  // Status indicator component
-  const StatusIndicator = () => (
-    <div className="flex items-center gap-2 mt-2">
-      <div
-        className={`w-2 h-2 rounded-full ${
-          person.email
-            ? "bg-green-400"
-            : person.email2
-            ? "bg-blue-400 animate-pulse"
-            : "bg-gray-400"
-        }`}
-      />
-      <span className="text-sm text-gray-600 capitalize">
-        {person.email ? "completed" : "processing"}
-      </span>
-    </div>
-  );
-
-  return (
-    <div className="border rounded-lg p-4 shadow-md bg-white">
-      <div className="grid grid-cols-2 gap-4">
-        {/* Person Info Column */}
+  if (mode === "reviewing" && person) {
+    return (
+      <div className="border rounded-lg p-4 shadow-md bg-white space-y-4">
+        {/* Top Section - Person Info */}
         <div>
-          <h2 className="text-xl font-semibold">{person.name}</h2>
-          <p className="text-sm text-gray-500">{person.domain}</p>
+          <div className="flex justify-between items-start">
+            <div>
+              <h2 className="text-xl font-semibold">
+                {person?.profile_link && (
+                  <a
+                    href={person.profile_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-500 block hover:underline"
+                  >
+                    {person.name}
+                  </a>
+                )}
+              </h2>
+              <p className="text-sm text-gray-500">{person.domain}</p>
+            </div>
+          </div>
           <div className="space-y-2 mt-2">
-            {person.profile_link && (
-              <a
-                href={person.profile_link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-500 block hover:underline"
-              >
-                LinkedIn Profile
-              </a>
-            )}
             {person.twitter_handle && (
               <a
-                href={`https://twitter.com/${person.twitter_handle}`}
+                href={`${formatTwitter(person.twitter_handle, "link")}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-400 block hover:underline"
               >
-                @{person.twitter_handle}
+                {formatTwitter(person.twitter_handle, "@handle")}
               </a>
             )}
           </div>
 
-          <StatusIndicator />
+          <StatusIndicator mode={mode} />
 
           {/* Show insights if available */}
           {person.insights && (
-            <div className="mt-4 p-3 bg-gray-50 rounded text-sm">
-              <h3 className="font-medium mb-2">Insights</h3>
-              <p className="whitespace-pre-wrap text-gray-600">
-                {person.insights}
-              </p>
+            <div className="mt-4">
+              <button
+                onClick={() => setIsInsightsOpen(!isInsightsOpen)}
+                className="w-full flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <h3 className="font-medium text-sm">Insights</h3>
+                <svg
+                  className={`w-4 h-4 transform transition-transform ${
+                    isInsightsOpen ? "rotate-180" : ""
+                  }`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </button>
+              <div
+                className={`transition-all duration-200 ${
+                  isInsightsOpen
+                    ? "opacity-100 mt-2"
+                    : "opacity-0 max-h-0 overflow-hidden"
+                }`}
+              >
+                <p className="p-3 bg-gray-50 rounded-lg text-sm text-gray-600 whitespace-pre-wrap">
+                  {person.insights}
+                </p>
+              </div>
             </div>
           )}
 
@@ -129,68 +232,132 @@ Met at hackathon, interested in LLMs`}
           )}
         </div>
 
-        {/* Email Draft Column */}
-        <div>
-          {person.email && (
-            <>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-medium">Email Draft</h3>
-                <button
-                  onClick={() => setIsEditing(!isEditing)}
-                  className="text-sm text-blue-500 hover:text-blue-600"
-                >
-                  {isEditing ? "Preview" : "Edit"}
-                </button>
-              </div>
+        {/* Bottom Section - Email */}
+        {person.email && (
+          <div className="border-t pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-lg font-medium">Edit Message</h3>
+            </div>
 
-              {isEditing ? (
-                <textarea
-                  className="w-full h-64 p-3 border rounded font-mono text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={editedEmail}
-                  onChange={(e) => setEditedEmail(e.target.value)}
+            <CopyableTextArea
+              value={editedEmail}
+              onChange={(e) => setEditedEmail(e.target.value)}
+              onKeyDown={(e) =>
+                handleKeyDown(e, async () => {
+                  if (onSendPerson) {
+                    await onSendPerson(editedEmail);
+                  }
+                })
+              }
+              className="w-full p-3 border rounded font-mono text-sm bg-gray-50 overflow-auto whitespace-pre-wrap focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y min-h-[300px]"
+              rows={10}
+              spellCheck={false}
+            />
+
+            {/* Possible emails */}
+            {
+              <div className="mt-4">
+                <h4 className="text-sm font-medium mb-2">
+                  Email Addresses to Send To
+                </h4>
+                <CopyableTextArea
+                  value={possibleEmails}
+                  onChange={(e) => {
+                    setPossibleEmails(e.target.value);
+                    // Update the person object with new emails
+                    if (person) {
+                      person.possible_emails = e.target.value
+                        .split("\n")
+                        .map((email) => email.trim())
+                        .filter((email) => email !== "");
+                    }
+                  }}
+                  className="w-full p-3 border rounded font-mono text-sm bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  placeholder="Enter email addresses (one per line)"
+                  rows={5}
+                  spellCheck={false}
                 />
-              ) : (
-                <div className="w-full h-64 p-3 border rounded font-mono text-sm bg-gray-50 overflow-auto whitespace-pre-wrap">
-                  {editedEmail}
-                </div>
-              )}
+                <p className="text-xs text-gray-500 mt-1">
+                  Enter one email address per line
+                </p>
+              </div>
+            }
 
-              {/* Possible emails */}
-              {person.possible_emails && person.possible_emails.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-sm font-medium mb-2">
-                    Possible Email Addresses
-                  </h4>
-                  <div className="space-y-1">
-                    {person.possible_emails.map((email, idx) => (
-                      <div
-                        key={idx}
-                        className="text-sm font-mono text-gray-600"
-                      >
-                        {email}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Send button */}
-              {onSend && (
+            <div className="mt-4 flex justify-end">
+              {onSendPerson && (
                 <button
-                  onClick={onSend}
-                  className="mt-4 w-full px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+                  onClick={() => onSendPerson(editedEmail)}
+                  className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
                 >
-                  Send Outreach
+                  Send Email
                 </button>
               )}
-            </>
-          )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
-          {person.email && (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center text-gray-500">
+  if (mode === "completed" && person) {
+    // show the list of email addresses sent to, if twitter handle was sent to, linkedin link, twitter link, the email, and then a collapsibl that shows the json when expanded
+    return (
+      <div className="border rounded-lg p-4 shadow-md bg-white space-y-4">
+        {/* Top Section - Person Info */}
+        <div>
+          <div className="flex justify-between items-start">
+            <div>
+              <h2 className="text-xl font-semibold">
+                {person?.profile_link && (
+                  <a
+                    href={person.profile_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-500 block hover:underline"
+                  >
+                    {person.name}
+                  </a>
+                )}
+              </h2>
+              <p className="text-sm text-gray-500">{person.domain}</p>
+            </div>
+            {mode === "completed" && onRedraft && (
+              <button
+                onClick={onRedraft}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                title="If the information was scraped incorrectly, click to move this card to the review section where you can edit the email and send it manually."
+              >
+                Redraft
+              </button>
+            )}
+          </div>
+          <div className="space-y-2 mt-2">
+            {person.twitter_handle && (
+              <a
+                href={`${formatTwitter(person.twitter_handle, "link")}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 block hover:underline"
+              >
+                {formatTwitter(person.twitter_handle, "@handle")}
+              </a>
+            )}
+          </div>
+
+          <StatusIndicator mode={mode} />
+
+          {/* Show insights if available */}
+          {person.insights && (
+            <div className="mt-4">
+              <button
+                onClick={() => setIsInsightsOpen(!isInsightsOpen)}
+                className="w-full flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <h3 className="font-medium text-sm">Insights</h3>
                 <svg
-                  className="w-12 h-12 mx-auto text-green-500"
+                  className={`w-4 h-4 transform transition-transform ${
+                    isInsightsOpen ? "rotate-180" : ""
+                  }`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -199,30 +366,62 @@ Met at hackathon, interested in LLMs`}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    d="M19 9l-7 7-7-7"
                   />
                 </svg>
-                <p className="mt-2">Outreach Completed</p>
+              </button>
+              <div
+                className={`transition-all duration-200 ${
+                  isInsightsOpen
+                    ? "opacity-100 mt-2"
+                    : "opacity-0 max-h-0 overflow-hidden"
+                }`}
+              >
+                <p className="p-3 bg-gray-50 rounded-lg text-sm text-gray-600 whitespace-pre-wrap">
+                  {person.insights}
+                </p>
               </div>
             </div>
           )}
 
-          {person.email && (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center text-gray-500">
-                {person.email ? (
-                  <p>Waiting to process...</p>
-                ) : (
-                  <div className="animate-pulse">
-                    <p>Processing...</p>
-                    <p className="text-sm mt-2">Gathering information</p>
-                  </div>
-                )}
-              </div>
+          {/* Show notes if available */}
+          {person.notes && (
+            <div className="mt-4">
+              <h3 className="text-sm font-medium">Notes</h3>
+              <p className="text-sm text-gray-600 mt-1">{person.notes}</p>
             </div>
           )}
         </div>
+
+        {/* Bottom Section - Email */}
+        {person.email && (
+          <div className="border-t pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-lg font-medium">Final Email</h3>
+            </div>
+
+            <CopyableTextArea
+              value={person.email2 || person.email || ""}
+              readOnly
+              className="w-full p-3 border rounded font-mono text-sm bg-gray-50 whitespace-pre-wrap"
+              spellCheck={false}
+            />
+
+            {/* Sent email */}
+            {person.email_sent && (
+              <div className="mt-4">
+                <h4 className="text-sm font-medium mb-2">Sent to Emails</h4>
+                <CopyableTextArea
+                  value={person.email_sent.join("\n")}
+                  readOnly
+                  className="w-full p-3 border rounded font-mono text-sm bg-gray-50 overflow-auto whitespace-pre-wrap resize-y"
+                  spellCheck={false}
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
-    </div>
-  );
+    );
+  }
 };

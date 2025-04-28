@@ -21,11 +21,7 @@ def generate_permutations(name, domain):
         f"{first}{last}",
         f"{first}.{last}",
         f"{f}{last}",
-        f"{f}.{last}",
-        f"{first}{l}",
-        f"{first}.{l}",
-        f"{last}{first}",
-        f"{last}.{first}",
+        f"{f}.{last}"
     ]
 
     return [f"{fmt}@{domain}" for fmt in formats]

@@ -15,15 +15,18 @@ export interface Person {
   notes?: string;
   email?: string;
   email2?: string;
+  email_sent?: string[];
+  twitter_message_sent?: boolean;
 }
 
 export async function generatePersonContent(text: string): Promise<Person> {
-  const res = await axios.post(`${API_BASE}/generate-person-content`, { text });
+  console.log(text);
+  const res = await axios.post(`${API_BASE}/api/generate-person-content`, { text });
   return res.data;
 }
 
-export async function sendPerson(person: Person): Promise<string> {
-  const res = await axios.post(`${API_BASE}/send_person`, { person });
+export async function sendPerson(person: Person): Promise<Person> {
+  const res = await axios.post(`${API_BASE}/api/send-person`, { person });
   return res.data;
 }
 
@@ -33,8 +36,14 @@ interface CompanyPersonRecord {
 }
 
 export async function getCompanyPeople(
-  url: string
+  url: string,
+  domain: string
 ): Promise<CompanyPersonRecord[]> {
-  const res = await axios.post(`${API_BASE}/get-company-people`, { url });
+  const res = await axios.post(`${API_BASE}/api/get-company-people`, { url, domain });
+  return res.data;
+}
+
+export async function getCompletePeopleRecords(): Promise<Person[]> {
+  const res = await axios.get(`${API_BASE}/api/get-people-records`);
   return res.data;
 }

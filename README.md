@@ -4,10 +4,10 @@ Most advice today agrees: cold emails open doors.
 When a Sequoia partner visited my campus recently, she closed with:  
 > “As a student or innovator, your email address is your biggest unlock."
 
-Cold email galleries like [@_sonith](https://twitter.com/sonith) showcase this too.
+People like [@_sonith](https://twitter.com/_sonith) showcase this via cold email galleries on their accounts.
 
 I've been cold emailing for 6 years and unlocked massive opportunities.  
-But we're now in an era where **information transfer and transformation can be automated**.
+But we're now in an era where **information transfer and transformation can be automated**. If you were like me and writing decently thoughtful, personalized emails, you were jumping from company website to LinkedIn and Twitter to ChatGPT to hunter.io and prospeo.io to GMail. Having to consistently switch between typing and clicking gets annoying.
 
 And I **hate mundane tasks**.
 
@@ -21,7 +21,7 @@ So I built a workflow to scale **personalized startup outreach** using GPT, Reac
 
 I’ll help when I can — otherwise, I’ll try to intro you to someone who can.
 
-**If you find this helpful, please share the repo!** 🙌
+**If you find this helpful, please share the repo!** 🙌 I'd love to see what people can spin this into and how people leverage OSINT to supercharge their workflows, jobs, and careers.
 
 Check out [Other Notes and Future Directions](#other-notes-and-future-directions) for more details.
 
@@ -31,6 +31,7 @@ Check out [Other Notes and Future Directions](#other-notes-and-future-directions
 
 - Chrome installed
 - ChatGPT account (ideally Plus or better)
+- A Gmail account to send emails from
 
 You'll also need to **create a custom GPT** with:
 - Name: `Internship Seeking Cold Outreach`
@@ -46,20 +47,25 @@ You'll also need to **create a custom GPT** with:
      - (Optional) Other LLM API keys and ScrapingBee, ProxyCurl API keys for advanced scraping
    - Find your local Chrome paths on your machine. Google how to do this. Needed for browser-use and playwright/browser automation 
 
-2. **Connect your Custom GPT**
+2. **Launch CDP Chrome Instance via Terminal**
+   - ```bash
+      .CHROME_PATH --user-data-dir=CHROME_USER_DATA_DIR --profile-directory=PROFILE_DIRECTORY_NAME --remote-debugging-port=9222
+   ```
+
+3. **Connect your Custom GPT**
    - Open a conversation with your custom GPT.
    - Copy the conversation link.
    - Paste it into the `CHATGPT_URL` `.env` variable.
 
-3. **Customize Prompts**
+4. **Customize Prompts**
    - Copy `PROMPTS_example.py` ➔ `PROMPTS.py`
    - Modify as needed (the examples are already well-commented).
 
-4. **Frontend Environment**
+5. **Frontend Environment**
    - In `frontend/`, run `npm install`
    - Run `npm run dev`
 
-5. **Backend Environment**
+6. **Backend Environment**
    - In `backend/`, run `pip install -r requirements.txt`
    - Run `python app.py`
 
@@ -97,6 +103,17 @@ So I formalized the script from approach one into `company_processor.py` and cre
 ----
 
 So now we're at React + FastAPI. You can attempt to use those older approaches but be prepared to do some minor refactoring (shouldn't be too bad if you're decently versed with Python, hit me up with questions) especially because some functions have been changed.
+
+You can also run `person_processor.py` directly to get a single person processed. Example usage:
+
+```bash
+python person_processor.py --text "Bill Gates
+microsoft.com
+https://www.linkedin.com/in/williamhgates/
+https://x.com/billgates/
+https://www.gatesnotes.com/
+other notes: super smort, i use his operating system"
+```
 
 #  Other Notes and Future Directions
 

@@ -70,7 +70,7 @@ async def scrape_linkedin_profile(
                 details["about"] = about_section.get_text(strip=True, separator="\n")
 
             for section in ["experience", "education"]:
-                url = f"{person['profile_link']}/details/{section}"
+                url = f"{person['profile_link'].rstrip('/')}/details/{section}"
                 print(person["name"], section, url)
                 await page.goto(url)
                 await page.wait_for_timeout(3000)

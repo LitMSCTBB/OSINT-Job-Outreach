@@ -22,13 +22,36 @@ def cache_person_data(domain, person):
         json.dump(person, f, indent=2)
 
 
-def get_person_data(domain, person_name):
-    """Get a person's data from cache"""
-    cache_path = get_person_cache_path(domain, person_name)
-    if os.path.exists(cache_path):
-        with open(cache_path, "r") as f:
-            data = json.load(f)
-            return make_auto_caching(domain, data)
+def get_person_data(domain=None, person_name=None):
+    """Get a person's data from cache
+
+    Args:
+        domain: Optional domain to narrow search. If not provided, will search all domains
+        person_name: Name of person to find
+
+    Returns:
+        Person data dict if found, None otherwise
+    """
+    if domain and person_name:
+        # Original direct lookup if we have both domain and name
+        cache_path = get_person_cache_path(domain, person_name)
+        if os.path.exists(cache_path):
+            with open(cache_path, "r") as f:
+                data = json.load(f)
+                return make_auto_caching(domain, data)
+
+    elif person_name:
+        all_records = get_records()
+        for record in all_records:
+            # Case insensitive name matching
+            print(record["name"], person_name)
+            if record["name"].lower() == person_name.lower():
+                # Get the domain from the found record
+                record_domain = record.get("domain")
+                if record_domain:
+                    # Use the original cache path lookup with the found domain
+                    return get_person_data(record_domain, person_name)
+
     return None
 
 
@@ -55,6 +78,26 @@ def update_person_data(domain, person_name, updates):
         cache_person_data(domain, person)
         return person
     return None
+
+
+def get_records():
+    # iterate over all folders in data. if there is a person_cache folder, go through the json files in there.
+    records = []
+    for folder in os.listdir("data"):
+        if os.path.isdir(os.path.join("data", folder)):
+            # check if there is a person_cache folder
+            if os.path.isdir(os.path.join("data", folder, "person_cache")):
+                for file in os.listdir(os.path.join("data", folder, "person_cache")):
+                    if file.endswith(".json"):
+                        with open(
+                            os.path.join("data", folder, "person_cache", file), "r"
+                        ) as f:
+                            obj = json.load(f)
+                            # check if obj has a name and profile_link
+                            if "name" in obj and "profile_link" in obj:
+                                obj["domain"] = folder
+                                records.append(obj)
+    return records
 
 
 class AutoCachingPerson(dict):

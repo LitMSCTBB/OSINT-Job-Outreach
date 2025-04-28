@@ -11,7 +11,7 @@ import asyncio
 from tools.linkedin import scrape_linkedin_profile
 from tools.twitter import scrape_twitter_posts, send_twitter_dm
 from tools.osint import crawl_person
-from backend.tools.email import craft_messages, find_all_permutation_emails, send_gmail
+from tools.email import craft_messages, find_all_permutation_emails, send_gmail
 from utils.person_cache import get_person_data, make_auto_caching
 from browser_use import Browser, BrowserConfig
 
@@ -31,7 +31,8 @@ browser_config = BrowserConfig(
 )
 
 browser = Browser(config=browser_config)
-global b, context
+b = None
+context = None
 
 PARSE_PROMPT = """Extract information from the following text into a JSON object with these fields:
 - name: The person's full name
@@ -94,25 +95,34 @@ async def edit_message(message: str) -> str:
         # Clean up temp file
         os.unlink(temp_path)
 
+
 async def scrape_person(person_data):
     # merge with loaded person
     try:
-        person = get_person_data(person_data["domain"], person_data["name"])
-        person["profile_link"] = person_data["linkedin"]
-        person["twitter_handle"] = person_data["twitter_handle"]
-        person["domain"] = person_data["domain"]
-        person["notes"] = person_data["notes"]
+        person = get_person_data(person_data.get("domain"), person_data.get("name"))
+        # only update fields if they exist in person_data
+        if person_data.get("linkedin"):
+            person["profile_link"] = person_data.get("linkedin")
+        if person_data.get("twitter_handle"):
+            person["twitter_handle"] = person_data.get("twitter_handle")
+        if person_data.get("domain"):
+            person["domain"] = person_data.get("domain")
+        if person_data.get("notes"):
+            person["notes"] = person_data.get("notes")
     except Exception as e:
         print(f"Error loading person from cache, making new person: {e}")
+        obj = {"name": person_data.get("name")}
+        if person_data.get("linkedin"):
+            obj["profile_link"] = person_data.get("linkedin")
+        if person_data.get("twitter_handle"):
+            obj["twitter_handle"] = person_data.get("twitter_handle")
+        if person_data.get("domain"):
+            obj["domain"] = person_data.get("domain")
+        if person_data.get("notes"):
+            obj["notes"] = person_data.get("notes")
         person = make_auto_caching(
             person_data["domain"],
-            {
-                "name": person_data["name"],
-                "profile_link": person_data["linkedin"],
-                "twitter_handle": person_data["twitter_handle"],
-                "domain": person_data["domain"],
-                "notes": person_data["notes"],
-            },
+            obj
         )
 
     # Scrape LinkedIn
@@ -126,19 +136,20 @@ async def scrape_person(person_data):
         await crawl_person(browser, context, person["domain"], person)
     else:
         # no deep dive but still scrape twitter if twitter handle was provided
-        if person["twitter_handle"] != None:
+        if person.get("twitter_handle"):
             page = await context.new_page()
             person["twitter_summary"] = await scrape_twitter_posts(
                 person["twitter_handle"], browser=browser, page=page
             )
+            person["insights"] += f"\n\nTwitter: {person['twitter_summary']}"
             await page.close()
-    
+
     return person
 
-async def generate_email(person):
-    # Compile insights
-    if not person["email"]:
 
+async def generate_email(person: dict):
+    # Compile insights
+    if person.get("email") is None:
         # Draft message using ChatGPT (or switch to API if you want)
         page = await context.new_page()
         await page.goto(CHATGPT_URL)
@@ -165,12 +176,22 @@ async def generate_email(person):
     print("-" * 40)
     print(person["email"])
 
+
 async def send_messages(person):
     gmail_page = await context.new_page()
     await gmail_page.goto("https://mail.google.com/mail/u/0/#inbox")
+
+    if person.get("email_sent", None) is None:
+        person["email_sent"] = []
+
     for email in person["possible_emails"]:
         try:
-            await send_gmail(email, person["email"], gmail_page)
+            if email not in person["email_sent"]:
+                if person.get("email2"):
+                    status = await send_gmail(email, person["email2"], gmail_page)
+                    if status:
+                        person["email_sent"].append(email)
+
         except Exception as e:
             print(f"Error sending email {email}: {e}")
     await gmail_page.close()
@@ -178,15 +199,17 @@ async def send_messages(person):
     if person.get("twitter_handle") and person.get("twitter_message"):
         twitter_page = await context.new_page()
         await twitter_page.goto("https://x.com/messages")
+
+        person["twitter_message_sent"] = False
         try:
-            await send_twitter_dm(
-                person["twitter_handle"], person["twitter_message"], twitter_page
-            )
+            if not person["twitter_message_sent"]:
+                await send_twitter_dm(
+                    person["twitter_handle"], person["twitter_message"], twitter_page
+                )
+                person["twitter_message_sent"] = True
         except Exception as e:
             print(f"Error sending Twitter DM to {person['twitter_handle']}: {e}")
         await twitter_page.close()
-
-    return "email and "
 
 
 async def run(person_data):
@@ -194,7 +217,7 @@ async def run(person_data):
     person = await scrape_person(person_data)
 
     await generate_email(person)
-    
+
     # Ask if user wants to edit
     edit = input("\nEdit message? (y/N): ").lower().strip()
     if edit == "y":
@@ -206,10 +229,16 @@ async def run(person_data):
 
     await send_messages(person)
 
-async def main():
+
+async def initialize_globals():
     global b, context
     b = await browser.get_playwright_browser()
     context = b.contexts[0]
+    return b, context
+
+
+async def main():
+    await initialize_globals()
 
     parser = argparse.ArgumentParser(
         description="Parse person info using GPT",
@@ -268,6 +297,7 @@ Met at hackathon, interested in LLMs""",
 
     # Continue with processing...
     await run(person_data)
+
 
 # if running this file standalone on the backend
 if __name__ == "__main__":
