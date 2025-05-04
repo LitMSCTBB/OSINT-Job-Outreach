@@ -11,6 +11,7 @@ import {
 interface NewPersonCard {
   id: string; // Temporary ID for new cards
   timestamp: number; // For ordering
+  initialInfo?: string;
 }
 
 function App() {
@@ -38,6 +39,7 @@ function App() {
     try {
       const records = await getCompletePeopleRecords();
       setCompletePeople(records);
+      setReviewingPeople((prev) => (prev.filter((p) => !records.includes(p))));
     } catch (err) {
       console.error("Failed to fetch people records:", err);
       setError("Failed to fetch people records");
@@ -75,11 +77,11 @@ function App() {
       const res = await getCompanyPeople(url, domain);
       const people = res.map((person) => ({
         id: person.profile_link,
-        name: person.name,
-        profile_link: person.profile_link,
-        domain: domain,
+        timestamp: Date.now(),
+        initialInfo: `${person.name}\n${person.profile_link}\n${domain}`,
       }));
       // setPeople(people);
+      setNewPersonCards(people);
       setIsAddCompanyOpen(false);
     } catch (err) {
       setError("Failed to add company");
@@ -94,7 +96,7 @@ function App() {
       if (person2.email_sent && person2.twitter_message_sent) {
         setCompletePeople((prev) => [...prev, person2]);
         setReviewingPeople((prev) =>
-          prev.filter((p) => p.name !== person.name)
+          prev.filter((p) => { console.log(p.name, person2.name); return p.name !== person2.name; })
         );
       }
       setSuccess(
@@ -301,6 +303,7 @@ function App() {
                     key={card.id}
                     onAddNewPerson={(text) => handleAddPerson(text, card.id)}
                     onCancel={() => handleRemoveNewCard(card.id)}
+                    initialInfo={card.initialInfo}
                   />
                 ))}
               </div>
@@ -379,6 +382,12 @@ function App() {
         {success && (
           <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded shadow-lg">
             <p className="text-green-700">{success}</p>
+            <button
+              onClick={() => setSuccess(null)}
+              className="text-green-500 text-sm hover:text-green-700"
+            >
+              Dismiss
+            </button>
           </div>
         )}
       </div>

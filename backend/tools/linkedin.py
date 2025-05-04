@@ -11,42 +11,12 @@ from langchain_openai import ChatOpenAI
 import os
 import requests
 
+from PROMPTS import MY_UNIVERSITY
 from utils.person_cache import make_auto_caching
 from utils.prompter import prompt
 
-# Setup the cache (can persist across runs)
-cache = diskcache.Cache("data/linkedin_profiles")
-
-
-def async_cache_on_person(func):
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        person = args[0] if args else kwargs.get("person")
-        if not person or "profile_link" not in person:
-            raise ValueError(
-                "async_cache_on_person requires person dict with 'profile_link'"
-            )
-
-        key_material = json.dumps(
-            {"name": person.get("name"), "link": person.get("profile_link")},
-            sort_keys=True,
-        )
-
-        cache_key = hashlib.sha256(key_material.encode()).hexdigest()
-        if cache_key in cache:
-            return cache[cache_key]
-
-        result = await func(*args, **kwargs)
-        cache[cache_key] = result
-        return result
-
-    return wrapper
-
-
 # for testing manually person needs to be a dict with name, profile_link
 
-
-@async_cache_on_person
 async def scrape_linkedin_profile(
     person: dict, method: str = "playwright", browser=None, page=None
 ):
@@ -61,6 +31,19 @@ async def scrape_linkedin_profile(
             await page.wait_for_timeout(3000)
             html = await page.content()
             soup = BeautifulSoup(html, "html.parser")
+
+            # get the name, and if it's not already set return so that it can be collected and then go back to main function and continue data processing until scraping is called again
+            name_section = soup.select_one("a.ember-view > h1")
+            if name_section:
+                details["name"] = name_section.get_text(strip=True)
+                if not person.get("name"):
+                    person["name"] = details["name"]
+                    return
+
+            # get the quick description
+            quick_description = soup.select_one("div.text-body-medium")
+            if quick_description:
+                details["description"] = quick_description.get_text(strip=True)
 
             # get the about section, will be the first one under this selector
             about_section = soup.select_one(
@@ -86,17 +69,39 @@ async def scrape_linkedin_profile(
                 else:
                     details[section] = ""
 
+            # want to also scrape posts
+            url = f"{person['profile_link']}/recent-activity/all/"
+            await page.goto(url)
+            await page.wait_for_timeout(3000)
+            html = await page.content()
+            soup = BeautifulSoup(html, "html.parser")
+            post_container = soup.find("ul", class_="justify-center")
+            if post_container:
+                posts = post_container.find_all("li")
+                details["posts"] = []
+                for post in posts[:5]:
+                    post_text = post.get_text(strip=True)
+                    if post_text:
+                        details["posts"].append(post_text)
+
+
             # combined everything into one string
             insights = "\n".join(
                 [f"{section}:\n{text}" for section, text in details.items()]
             )
 
             print(f"{person['name']} done:\n{insights}")
+            # make summary more readable
+            insights = await prompt(
+                system_prompt="Make the following linkedin summary more readable. Make it more readable and easier to understand. Keep it short, concise, don't need a ton of english, just the facts.",
+                user_prompt=insights,
+                model="gpt-3.5-turbo",
+                provider="openai",
+            )
             person["linkedin_summary"] = insights
 
         except Exception as e:
             print(f"Error scraping linkedin profile for {person['name']}: {e}")
-            return ""
 
     elif method == "proxycurl":
         headers = {"Authorization": f"Bearer {os.getenv('PROXYCURL_API_KEY')}"}
@@ -139,7 +144,7 @@ async def get_employees(context, company_url: str, domain: str):
     page = await context.new_page()
     profiles = []
 
-    for keyword in ["cofounder", "MIT"]:
+    for keyword in ["cofounder", "ceo", "cto", MY_UNIVERSITY]:
         url_with_keyword = f"{company_url}/people?keywords={keyword}"
         await page.goto(url_with_keyword)
         await page.wait_for_timeout(3000)
@@ -170,6 +175,7 @@ async def get_employees(context, company_url: str, domain: str):
             profiles.append({"name": name_text, "profile_link": href})
 
     print([p["name"] for p in profiles])
+    return profiles
 
 
 async def scrape_company_employees(context, company_url: str, domain: str):

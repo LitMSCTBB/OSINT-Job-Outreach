@@ -11,6 +11,7 @@ interface Props {
   onSendPerson?: (email2: string) => Promise<void>;
   onCancel?: () => void;
   onRedraft?: () => Promise<void>;
+  initialInfo?: string;
 }
 
 /**
@@ -82,9 +83,10 @@ export const PersonCard: React.FC<Props> = ({
   onSendPerson,
   onCancel,
   onRedraft,
+  initialInfo,
 }) => {
   const [inputText, setInputText] = useState(
-    person?.email2 || person?.email || ""
+    person?.email2 || person?.email || (mode === "input" && initialInfo) || ""
   );
   const [editedEmail, setEditedEmail] = useState(person?.email || "");
   const textareaRef = useRef<HTMLTextAreaElement>(null);

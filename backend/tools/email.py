@@ -8,21 +8,52 @@ import pandas as pd
 from playwright.async_api import Page
 
 from CONSTANTS import COLD_EMAIL_PROMPTS, RESUME_PATH
+from PROMPTS import SIGNATURE
 from utils.notifications import notify_user
 from utils.prompter import prompt
 
+
 def generate_permutations(name, domain):
-    first, last = name.lower().split()
-    f, l = first[0], last[0]
+    # Split name and clean up any suffixes (III, Jr., etc.)
+    name_parts = name.lower().split()
+    name_parts = [
+        part
+        for part in name_parts
+        if not part.upper() in ["II", "III", "IV", "JR", "SR", "JR.", "SR."]
+    ]
+
+    # Handle first name and remaining parts
+    first = name_parts[0]
+    last = name_parts[-1]  # Last actual surname
+
+    # Get initials
+    f = first[0]
+    l = last[0]
+
+    # For multi-word names, also get the middle part if it exists
+    middle = ""
+    if len(name_parts) > 2:
+        middle = "".join(name_parts[1:-1])
 
     formats = [
-        f"{first}",
-        f"{last}",
-        f"{first}{last}",
-        f"{first}.{last}",
-        f"{f}{last}",
-        f"{f}.{last}"
+        f"{first}",  # gerardo
+        f"{last}",  # jose
+        f"{first}{last}",  # gerardojose
+        f"{f}{last}",  # gjose
+        f"{f}.{last}",  # g.jose
+        f"{first}{l}",  # gerardog
+        f"{f}{l}",  # gj
     ]
+
+    # Add multi-word name variants if applicable
+    if len(name_parts) > 2:
+        formats.extend(
+            [
+                f"{first}{middle}{last}",  # gerardosanjose
+                f"{first}.{last}",  # gerardo.jose
+                f"{first}{middle[0]}{last}",  # gerardosjose
+            ]
+        )
 
     return [f"{fmt}@{domain}" for fmt in formats]
 
@@ -88,15 +119,9 @@ async def craft_messages(
                 """
             )
 
-            signature = """
-    Best,
-    Arnav Adhikari
-    Electrical Engineering & Computer Science @ MIT
-    arnavadhikari.com | linkedin.com/in/arnavwad | +1 (713) 614-1793"""
-
             # ask gpt 3.5 to quickly extract just the subject and body
             email_content = await prompt(
-                system_prompt=f"From this GPT response, extract just the email content with NO OTHER TEXT. The first line of output should be the subject (without the words Subject or anything) and afterwards should be the body. Replace whatever signature is in the email with the following: {signature}.",
+                system_prompt=f"From this GPT response, extract just the email subject and body. In the past you've been exclusing the subject from the output - it usually has occurrences of \"<>\" and \"|\" in it. The first line of output should be the subject (without the words Subject or anything) and afterwards should be the body. Replace whatever signature is in the email with the following:\n{SIGNATURE}.",
                 user_prompt=email,
                 model="gpt-3.5-turbo",
                 provider="openai",
@@ -261,7 +286,7 @@ async def send_gmail(email_address, email_data, page: Page = None):
         await page.click("div.dC")
         print(f"Email sent to {email_address}")
         return True
-    except Exception as e:
+    except Exception as e:  
         print(f"Error sending email to {email_address}: {e}")
         notify_user(
             "Error Sending Email",
@@ -278,7 +303,7 @@ async def send_gmail(email_address, email_data, page: Page = None):
 # ---------------------------- CLI Test ----------------------------
 
 if __name__ == "__main__":
-    name = "Jesse Zhang"
+    name = "Gerardo San Jose III"
     domain = "decagon.ai"
 
     emails = asyncio.run(find_all_permutation_emails(name, domain))

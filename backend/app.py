@@ -7,7 +7,6 @@ load_dotenv()
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional
 from contextlib import asynccontextmanager
 from tools.linkedin import get_employees
 from utils.person_cache import get_person_data, get_records

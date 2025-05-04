@@ -40,6 +40,7 @@ def get_person_data(domain=None, person_name=None):
                 data = json.load(f)
                 return make_auto_caching(domain, data)
 
+    # if domain is not provided, search all domains
     elif person_name:
         all_records = get_records()
         for record in all_records:

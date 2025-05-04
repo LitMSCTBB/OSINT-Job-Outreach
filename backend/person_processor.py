@@ -97,37 +97,36 @@ async def edit_message(message: str) -> str:
 
 
 async def scrape_person(person_data):
-    # merge with loaded person
-    try:
-        person = get_person_data(person_data.get("domain"), person_data.get("name"))
-        # only update fields if they exist in person_data
-        if person_data.get("linkedin"):
-            person["profile_link"] = person_data.get("linkedin")
-        if person_data.get("twitter_handle"):
-            person["twitter_handle"] = person_data.get("twitter_handle")
-        if person_data.get("domain"):
-            person["domain"] = person_data.get("domain")
-        if person_data.get("notes"):
-            person["notes"] = person_data.get("notes")
-    except Exception as e:
-        print(f"Error loading person from cache, making new person: {e}")
-        obj = {"name": person_data.get("name")}
-        if person_data.get("linkedin"):
-            obj["profile_link"] = person_data.get("linkedin")
-        if person_data.get("twitter_handle"):
-            obj["twitter_handle"] = person_data.get("twitter_handle")
-        if person_data.get("domain"):
-            obj["domain"] = person_data.get("domain")
-        if person_data.get("notes"):
-            obj["notes"] = person_data.get("notes")
-        person = make_auto_caching(
-            person_data["domain"],
-            obj
-        )
-
-    # Scrape LinkedIn
+    # this logic handles partial args, like just name+linkedin, just name+domain, or just domain+linkedin
     page = await context.new_page()
-    await scrape_linkedin_profile(person, page=page)
+    # Scrape LinkedIn first
+    person = {}
+    if person_data.get("linkedin"):
+        person["profile_link"] = person_data.get("linkedin")
+    if person_data.get("domain"):
+        person["domain"] = person_data.get("domain")
+
+    if person_data.get("name"):
+        person["name"] = person_data.get("name")
+    else:
+        await scrape_linkedin_profile(person, page=page) # this part should just update the name internally
+
+    # get existing person data and reset person obj if it exists
+    person2 = get_person_data(person_data.get("domain"), person_data.get("name") or person.get("name"))
+    if person2:
+        person = person2
+    else:
+        person = make_auto_caching(person_data.get("domain"), person)
+
+    if person.get("linkedin_summary") is None:
+        await scrape_linkedin_profile(person, page=page)
+
+    print(person)
+
+    if person_data.get("twitter_handle"):
+        person["twitter_handle"] = person_data.get("twitter_handle")
+    if person_data.get("notes"):
+        person["notes"] = person_data.get("notes")
 
     person["insights"] = f"LinkedIn: {person['linkedin_summary']}"
 
@@ -159,7 +158,7 @@ async def generate_email(person: dict):
             page,
             person["domain"],
             person,
-            notes=person["notes"],
+            notes=person.get("notes", ""),
         )
         await page.close()
 
@@ -190,7 +189,8 @@ async def send_messages(person):
                 if person.get("email2"):
                     status = await send_gmail(email, person["email2"], gmail_page)
                     if status:
-                        person["email_sent"].append(email)
+                        print(f"Email sent to {email}, should be appending to list")
+                        person["email_sent"] = person["email_sent"] + [email]
 
         except Exception as e:
             print(f"Error sending email {email}: {e}")

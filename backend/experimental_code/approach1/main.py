@@ -24,6 +24,7 @@ from utils.CONSTANTS import (
     CHOOSE_PROFILE_PROMPT,
     get_transmission_ready,
     get_process,
+    SIGNATURE,
 )
 
 import json
@@ -225,15 +226,9 @@ async def craft_messages(
             """
             )
 
-            signature = """
-Best,
-Arnav Adhikari
-Electrical Engineering & Computer Science @ MIT
-arnavadhikari.com | linkedin.com/in/arnavwad | +1 (713) 614-1793"""
-
             # ask gpt 3.5 to quickly extract just the subject and body
             email_content = await prompt(
-                system_prompt=f"From this GPT response, extract just the email content with NO OTHER TEXT. The first line of output should be the subject (without the words Subject or anything) and afterwards should be the body. Replace whatever signature is in the email with the following: {signature}.",
+                system_prompt=f"From this GPT response, extract just the email content with NO OTHER TEXT. The first line of output should be the subject (without the words Subject or anything) and afterwards should be the body. Replace whatever signature is in the email with the following: {SIGNATURE}",
                 user_prompt=email,
                 model="gpt-3.5-turbo",
                 provider="openai",

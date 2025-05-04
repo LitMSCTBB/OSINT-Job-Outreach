@@ -37,6 +37,7 @@ You'll also need to **create a custom GPT** with:
 - Name: `Internship Seeking Cold Outreach`
 - Description: `Helps me generate emails and Twitter DMs for founders, CEOs, technical staff, and alumni to land jobs.`
 - Instructions: Use the bottom section of `PROMPTS_example.py`
+- NOTE: these instructions are completely yours, so tweak it however you want and experiment to see what works best for you based on the generations from the tool.
 
 ## Setup Steps
 
@@ -67,7 +68,7 @@ You'll also need to **create a custom GPT** with:
 
 6. **Backend Environment**
    - In `backend/`, run `pip install -r requirements.txt`
-   - Run `python app.py`
+   - Run `uvicorn app:app`
 
 # 🕵️‍♂️ OSINT and Deep Dive Agents
 
